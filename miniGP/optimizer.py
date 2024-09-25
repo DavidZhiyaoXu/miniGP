@@ -2,8 +2,9 @@ import torch
 from typing import Tuple, Callable
 from .gp import GaussianProcess
 from .acquisition import AbstractAcquisition
+from .utils import *
 
-class BayesianOptimization():
+class BayesianOptimizer():
     def __init__(self, objective: Callable, gp_model: GaussianProcess, acq_func: AbstractAcquisition, dims: int, bounds: torch.Tensor):
         # TODO: Check dims and bounds match.
         self.objective = objective
@@ -13,22 +14,23 @@ class BayesianOptimization():
         self.bounds = bounds
         self.y_best = float('inf')
 
-    def optimize(self: int, n_warmup: int, n_iter) -> torch.Tensor:
+    def optimize(self, n_warmup: int, n_iter: int) -> torch.Tensor:
         X_train = torch.rand((n_warmup, self.bounds.shape[0])) * (self.bounds[:, 1] - self.bounds[:, 0]) + self.bounds[:, 0]
         self.gp_model.fit(X_train, self.objective(X_train))
         self.y_best = torch.min(self.gp_model.y_train)
+        grid = torch.linspace(0, 10, 100).unsqueeze(1)
         for i in range(n_iter):
             X_next = self.select_next()
-            X_train = torch.cat((X_train, X_next.unsqueeze(0)), dim=0)
-            y_train = torch.cat((self.gp_model.y_train, self.objective(X_next.unsqueeze(0)).unsqueeze(0)), dim=0)
-            self.gp_model.fit(X_train, y_train)
+            self.gp_model.update(X_next.unsqueeze(0), self.objective(X_next.unsqueeze(0)))
             self.y_best = torch.min(self.gp_model.y_train)
-        return self.y_best
+            plot_process(self.gp_model, grid)
     
-    def select_next() -> torch.Tensor:
+    def select_next(self) -> torch.Tensor:
         # TODO: Optimize acquisition function
-        pass
+        X_candidate = torch.rand((100, self.bounds.shape[0])) * (self.bounds[:, 1] - self.bounds[:, 0]) + self.bounds[:, 0]
+        scores = self.acq_func.evaluate(X_candidate, self.y_best)
+        return X_candidate[torch.argmin(scores)]
     
-    # TODO: Should call gp.plot
-    def plot() -> None:
+    # TODO: Should call utils
+    def plot_gif() -> None:
         pass

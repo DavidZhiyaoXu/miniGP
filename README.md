@@ -1,4 +1,7 @@
 # miniGP
 A minimal Gaussian Process library 
 
-Will add GP and BO functionalities soon.
+Install locally editable by running:
+```zsh
+user@machine miniGP % pip install -e .
+```

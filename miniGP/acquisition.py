@@ -19,10 +19,10 @@ class PI(AbstractAcquisition):
     
     def evaluate(self, X: torch.Tensor, y_best: float) -> torch.Tensor:
         mu_s, cov_s = self.gp_model.predict(X)
-        sigma_s = torch.sqrt(torch.diag(cov_s)).clamp(min=1e-6)
+        sigma_s = torch.sqrt(torch.diag(cov_s)).clamp(min=1e-6).unsqueeze(1)
         Z = (y_best - mu_s) / sigma_s
         pi = norm.cdf(Z)
-        return -pi
+        return torch.from_numpy(-pi)
 
   
 class EI(AbstractAcquisition):
@@ -31,7 +31,7 @@ class EI(AbstractAcquisition):
     
     def evaluate(self, X: torch.Tensor, y_best: float) -> torch.Tensor:
         mu_s, cov_s = self.gp_model.predict(X)
-        sigma_s = torch.sqrt(torch.diag(cov_s)).clamp(min=1e-6)
+        sigma_s = torch.sqrt(torch.diag(cov_s)).clamp(min=1e-6).unsqueeze(1)
         Z = (y_best - mu_s) / sigma_s
         ei = -sigma_s * norm.pdf(Z) - sigma_s * Z * norm.cdf(Z)
         return ei

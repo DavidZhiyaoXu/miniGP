@@ -1,0 +1,4 @@
+matplotlib==3.8.4
+scipy==1.14.1
+setuptools==65.6.3
+torch==2.2.0.post100
