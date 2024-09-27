@@ -26,7 +26,6 @@ class BayesianOptimizer():
             plot_process(self.gp_model, grid)
     
     def select_next(self) -> torch.Tensor:
-        # TODO: Optimize acquisition function
         X_candidate = torch.rand((100, self.bounds.shape[0])) * (self.bounds[:, 1] - self.bounds[:, 0]) + self.bounds[:, 0]
         scores = self.acq_func.evaluate(X_candidate, self.y_best)
         return X_candidate[torch.argmin(scores)]
