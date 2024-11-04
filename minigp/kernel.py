@@ -32,11 +32,11 @@ class AbstractKernel(ABC):
 
 @dataclass
 class DeepKernelParameters(AbstractKernelParameters):
-    rbf_params: Dict[str, float]
+    sigma: float
     nn_params: Dict[str, Any]
     def param_dict(self) -> Dict[str, Any]:
         return {
-            "kernel_params": self.kernel_params,
+            "sigma": self.sigma,
             "nn_params": self.nn_params
         }
 

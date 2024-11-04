@@ -3,7 +3,7 @@ import torch
 import jax.numpy as jnp
 import jax
 from jax import random
-
+import numpy as np
 import matplotlib.pyplot as plt
 from typing import Tuple, NamedTuple, Optional, Any, Callable, Dict
 
@@ -11,11 +11,11 @@ from typing import Tuple, NamedTuple, Optional, Any, Callable, Dict
 def plot_process(process, X_test: jnp.ndarray, y_true: Optional[jnp.ndarray] = None) -> None:
     """Plot the GP mean and confidence interval over the test points."""
     mu_s, cov_s = process.predict(X_test)
-    std_s = torch.sqrt(torch.diag(cov_s))
+    std_s = jnp.sqrt(jnp.diagonal(cov_s))
 
-    X_test_np = X_test.detach().numpy()
-    mu_s_np = mu_s.detach().numpy().flatten()
-    std_s_np = std_s.detach().numpy()
+    X_test_np = np.array(X_test)
+    mu_s_np = np.array(mu_s).flatten()
+    std_s_np = np.array(std_s)
 
     plt.plot(X_test_np, mu_s_np, 'b-', label="Predicted Mean")
     plt.fill_between(X_test_np.flatten(),
