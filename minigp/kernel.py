@@ -7,11 +7,10 @@ import jax.random as random
 import jax.scipy as jsp
 
 from abc import ABC, abstractmethod
-
 from typing import Tuple, NamedTuple, Optional, Any, Callable, Dict
 from dataclasses import dataclass
 
-# from .utils import SimpleNN, ResNetNN
+from .utils import AbstractNN
 
 @dataclass
 class AbstractKernelParameters(ABC):
@@ -43,14 +42,14 @@ class DeepKernelParameters(AbstractKernelParameters):
 class DeepKernel(AbstractKernel):
     def __init__(
         self,
-        net_fn: Callable,
+        net_fn: AbstractNN,
         layer_dims: list
     ):
         self.net_fn = net_fn
         self.layer_dims = layer_dims
 
     def init_params(self, key: random.PRNGKey) -> DeepKernelParameters:
-        nn_model = self.net_fn(self.layer_dims, key)
+        nn_model = self.net_fn
         nn_params = nn_model.params  
         return DeepKernelParameters(
             sigma = 1.0,
@@ -59,13 +58,11 @@ class DeepKernel(AbstractKernel):
 
 
     def matrix(self, X1: jnp.ndarray, X2: jnp.ndarray, params: DeepKernelParameters) -> jnp.ndarray:
-        nn_model = self.net_fn(self.layer_dims, random.PRNGKey(0))
+        nn_model = self.net_fn
         X1_expanded = nn_model(X1, params.nn_params)
         X2_expanded = nn_model(X2, params.nn_params)
         sqdist = jnp.sum((X1_expanded[:, None] - X2_expanded[None, :]) ** 2, axis=2)
         return jnp.exp(-0.5 * sqdist / (params.sigma ** 2))
-        
-
 
         
 

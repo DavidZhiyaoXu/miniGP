@@ -68,13 +68,13 @@ class GaussianProcess():
         alpha = jsp.linalg.solve_triangular(L.T, alpha, lower=False)
 
         log_likelihood = -0.5 * jnp.dot(state.y_train, alpha)
-        log_likelihood -= jnp.sum(jnp.log(jnp.diag(L)))
+        log_likelihood -= jnp.sum(jnp.log(jnp.diag(L))) / 10
         log_likelihood -= 0.5 * len(state.y_train) * jnp.log(2 * jnp.pi)
         return log_likelihood
 
 
 
-def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_params: DeepKernelParameters, gp_params: GaussianProcessParameters, num_iters: int = 100, learning_rate: float = 0.01):
+def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_params: DeepKernelParameters, gp_params: GaussianProcessParameters, num_iters: int = 200, learning_rate: float = 0.01):
     """Optimize GP and kernel parameters by maximizing the log marginal likelihood."""
     
     # Define the objective function
@@ -89,14 +89,14 @@ def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_par
         'nn_params': kernel_params.nn_params,
         'noise': gp_params.noise
         }
-    optimizer = optax.adam(learning_rate)
+    optimizer = optax.adamaxw(learning_rate)
     opt_state = optimizer.init(params)
 
     # Optimization loop
     @jax.jit
     def step(opt_state, params):
         loss, grads = jax.value_and_grad(objective)(params)
-        updates, opt_state = optimizer.update(grads, opt_state)
+        updates, opt_state = optimizer.update(grads, opt_state,params)
         params = optax.apply_updates(params, updates)
         return opt_state, params, loss
 
@@ -105,8 +105,10 @@ def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_par
         if (i + 1) % 10 == 0:
             print(f"Iteration {i+1}, Loss: {loss:.4f}")
 
-    # Unpack optimized parameters
-    return params
+    optimized_kernel_params = DeepKernelParameters(sigma=params['sigma'], nn_params=params['nn_params'])
+    optimized_gp_params = GaussianProcessParameters(noise=params['noise'])
+
+    return optimized_kernel_params, optimized_gp_params
 
 
 # class GaussianProcess():
