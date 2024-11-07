@@ -68,28 +68,25 @@ class GaussianProcess():
         alpha = jsp.linalg.solve_triangular(L.T, alpha, lower=False)
 
         log_likelihood = -0.5 * jnp.dot(state.y_train, alpha)
-        log_likelihood -= jnp.sum(jnp.log(jnp.diag(L))) / 10
+        log_likelihood -= jnp.sum(jnp.log(jnp.diag(L))) / 2
         log_likelihood -= 0.5 * len(state.y_train) * jnp.log(2 * jnp.pi)
         return log_likelihood
 
 
 
 def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_params: DeepKernelParameters, gp_params: GaussianProcessParameters, num_iters: int = 200, learning_rate: float = 0.01):
-    """Optimize GP and kernel parameters by maximizing the log marginal likelihood."""
-    
-    # Define the objective function
     def objective(params):
         kernel_params = DeepKernelParameters(sigma=params['sigma'], nn_params=params['nn_params'])
         gp_params = GaussianProcessParameters(noise=params['noise'])
         return -gp.log_marginal_likelihood(state, kernel_params, gp_params)
 
-    # Flatten the parameters for optimization
+    # Flatten the parameters for optimization, NN kernel specific.
     params = {
         'sigma': kernel_params.sigma,
         'nn_params': kernel_params.nn_params,
         'noise': gp_params.noise
         }
-    optimizer = optax.adamaxw(learning_rate)
+    optimizer = optax.adam(learning_rate)
     opt_state = optimizer.init(params)
 
     # Optimization loop
@@ -102,47 +99,10 @@ def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_par
 
     for i in range(num_iters):
         opt_state, params, loss = step(opt_state, params)
-        if (i + 1) % 10 == 0:
+        if (i + 1) % 50 == 0:
             print(f"Iteration {i+1}, Loss: {loss:.4f}")
 
     optimized_kernel_params = DeepKernelParameters(sigma=params['sigma'], nn_params=params['nn_params'])
     optimized_gp_params = GaussianProcessParameters(noise=params['noise'])
 
     return optimized_kernel_params, optimized_gp_params
-
-
-# class GaussianProcess():
-#     def __init__(self, kernel: AbstractKernel, noise: float = 0):
-#         self.kernel = kernel
-#         self.X_train = None
-#         self.y_train = None
-#         self.K_fact = None
-    
-#     def fit(self, X_train: torch.Tensor, y_train: torch.Tensor) -> None:
-#         self.X_train = X_train
-#         self.y_train = y_train
-#         self.K_fact = torch.linalg.cholesky(self.kernel.matrix(self.X_train, self.X_train))
-
-#     # TODO: Should maintain a factorization of K_inverse. e.g. Cholesky + Schur Complement
-#     def update(self, X_train: torch.Tensor, y_train: torch.Tensor) -> None:
-#         L11 = self.K_fact
-#         A21 = self.kernel.matrix(X_train, self.X_train)
-#         A22 = self.kernel.matrix(X_train, X_train)
-#         L21 = torch.linalg.solve(L11,A21.T).T
-#         L22 = torch.linalg.cholesky(A22 - A21 @ torch.cholesky_solve(A21.T,L11))
-#         L_left = torch.cat([L11, L21], dim=0)
-#         L_right = torch.cat([torch.zeros_like(L21.T), L22], dim=0)
-#         self.K_fact = torch.cat([L_left, L_right], dim=1)
-#         self.X_train = torch.cat([self.X_train, X_train], dim=0)
-#         self.y_train = torch.cat([self.y_train, y_train], dim=0)
-
-#     def predict(self, X_test: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-#         K_s = self.kernel.matrix(self.X_train, X_test)
-#         K_ss = self.kernel.matrix(X_test, X_test)
-
-#         KsT_K_inv = torch.cholesky_solve(K_s,self.K_fact).T
-        
-#         mu_s = KsT_K_inv @ self.y_train
-#         cov_s = K_ss - KsT_K_inv @ K_s
-
-#         return mu_s, cov_s
