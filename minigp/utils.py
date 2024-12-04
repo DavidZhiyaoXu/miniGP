@@ -98,10 +98,10 @@ class Decoder(AbstractNN):
 def pretrain_diffeomorphism():
     raise NotImplementedError
 
-
-
-
 def plot_process(X_train: jnp.ndarray, y_train: jnp.ndarray, X_test: jnp.ndarray, mu_s: jnp.ndarray, std_s: jnp.ndarray, y_true: Optional[jnp.ndarray] = None) -> None:
+
+
+
     X_test_np = np.array(X_test)
     mu_s_np = np.array(mu_s).flatten()
     std_s_np = np.array(std_s)

@@ -31,11 +31,11 @@ class AbstractKernel(ABC):
 
 @dataclass
 class DeepKernelParameters(AbstractKernelParameters):
-    sigma: float
+    log_alpha: float
     nn_params: Dict[str, Any]
     def param_dict(self) -> Dict[str, Any]:
         return {
-            "sigma": self.sigma,
+            "log_alpha": self.log_alpha,
             "nn_params": self.nn_params
         }
 
@@ -52,7 +52,7 @@ class DeepKernel(AbstractKernel):
         nn_model = self.net_fn
         nn_params = nn_model.params  
         return DeepKernelParameters(
-            sigma = 1.0,
+            log_alpha = 0.0,
             nn_params = nn_params
         )
 
@@ -62,7 +62,7 @@ class DeepKernel(AbstractKernel):
         X1_expanded = nn_model(X1, params.nn_params)
         X2_expanded = nn_model(X2, params.nn_params)
         sqdist = jnp.sum((X1_expanded[:, None] - X2_expanded[None, :]) ** 2, axis=2)
-        return jnp.exp(-0.5 * sqdist / (params.sigma ** 2))
+        return jnp.exp(params.log_alpha) * jnp.exp(-0.5 * sqdist )
 
         
 

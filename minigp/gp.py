@@ -22,7 +22,7 @@ class GaussianProcessState():
 
 @dataclass
 class GaussianProcessParameters():
-    noise: float = 1e-6
+    noise: float = jnp.log(1e-6)
 
 class GaussianProcess():
     def init_state_with_params(self,
@@ -30,15 +30,15 @@ class GaussianProcess():
                                kernel_params: AbstractKernelParameters,
                                X_train: jnp.ndarray,
                                y_train: jnp.ndarray) -> Tuple[GaussianProcessState, GaussianProcessParameters]:
-        params = GaussianProcessParameters(noise = 1e-6) 
-        K = kernel.matrix(X_train, X_train, kernel_params) + params.noise * jnp.eye(len(X_train))
+        params = GaussianProcessParameters(noise = jnp.log(1e-6)) 
+        K = kernel.matrix(X_train, X_train, kernel_params) + jnp.exp(params.noise) * jnp.eye(len(X_train))
         L = jnp.linalg.cholesky(K)
         state = GaussianProcessState(X_train=X_train, y_train=y_train, K=K, L=L, kernel=kernel)
         return (state, params)
     
-    def fit(self, state: GaussianProcessState, kernel_params: AbstractKernelParameters, gp_params: GaussianProcessParameters) -> Tuple[GaussianProcessState, GaussianProcessParameters]:
+    def fit(self, state: GaussianProcessState, kernel_params: AbstractKernelParameters, gp_params: GaussianProcessParameters, jitter: float = 1e-6) -> Tuple[GaussianProcessState, GaussianProcessParameters]:
         params = gp_params
-        K = state.kernel.matrix(state.X_train, state.X_train, kernel_params) + params.noise * jnp.eye(len(state.X_train))
+        K = state.kernel.matrix(state.X_train, state.X_train, kernel_params) + (jnp.exp(gp_params.noise) + jitter) * jnp.eye(len(state.X_train))
         L = jnp.linalg.cholesky(K)
         state = GaussianProcessState(X_train=state.X_train, y_train=state.y_train, K=K, L=L, kernel=state.kernel)
         return (state, params)
@@ -46,22 +46,20 @@ class GaussianProcess():
     def predict(self, state: GaussianProcessState, kernel_params: AbstractKernelParameters, gp_params: GaussianProcessParameters, X_test: jnp.ndarray):
         """Predict the mean and variance at test points."""
         K_s = state.kernel.matrix(state.X_train, X_test, kernel_params)
-        K_ss = state.kernel.matrix(X_test, X_test, kernel_params) + gp_params.noise * jnp.eye(len(X_test))
+        K_ss = state.kernel.matrix(X_test, X_test, kernel_params) + jnp.exp(gp_params.noise) * jnp.eye(len(X_test))
 
-        # Solve for alpha
-        alpha = jsp.linalg.solve_triangular(state.L, state.y_train, lower=True)
-        alpha = jsp.linalg.solve_triangular(state.L.T, alpha, lower=False)
+        # Solve for KsT_K_inv
+        KsT_K_inv = jsp.linalg.solve_triangular(state.L, K_s, lower=True)
+        KsT_K_inv = jsp.linalg.solve_triangular(state.L.T, KsT_K_inv, lower=False)
+        KsT_K_inv = KsT_K_inv.T
 
-        # Predictive mean
-        mu_s = K_s.T @ alpha
+        mu_s = KsT_K_inv @ state.y_train
+        cov_s = K_ss - KsT_K_inv @ K_s
 
-        # Predictive variance
-        v = jsp.linalg.solve_triangular(state.L, K_s, lower=True)
-        cov_s = K_ss - v.T @ v
         return mu_s, jnp.diag(cov_s)
 
     def log_marginal_likelihood(self, state: GaussianProcessState, kernel_params: AbstractKernelParameters, gp_params: GaussianProcessParameters) -> float:
-        K = state.kernel.matrix(state.X_train, state.X_train, kernel_params) + gp_params.noise * jnp.eye(len(state.X_train))
+        K = state.kernel.matrix(state.X_train, state.X_train, kernel_params) + jnp.exp(gp_params.noise) * jnp.eye(len(state.X_train))
         L = jnp.linalg.cholesky(K)
 
         alpha = jsp.linalg.solve_triangular(L, state.y_train, lower=True)
@@ -76,13 +74,13 @@ class GaussianProcess():
 
 def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_params: DeepKernelParameters, gp_params: GaussianProcessParameters, num_iters: int = 200, learning_rate: float = 0.01):
     def objective(params):
-        kernel_params = DeepKernelParameters(sigma=params['sigma'], nn_params=params['nn_params'])
+        kernel_params = DeepKernelParameters(log_alpha=params['log_alpha'], nn_params=params['nn_params'])
         gp_params = GaussianProcessParameters(noise=params['noise'])
         return -gp.log_marginal_likelihood(state, kernel_params, gp_params)
 
     # Flatten the parameters for optimization, NN kernel specific.
     params = {
-        'sigma': kernel_params.sigma,
+        'log_alpha': kernel_params.log_alpha,
         'nn_params': kernel_params.nn_params,
         'noise': gp_params.noise
         }
@@ -102,7 +100,7 @@ def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_par
         if (i + 1) % 50 == 0:
             print(f"Iteration {i+1}, Loss: {loss:.4f}")
 
-    optimized_kernel_params = DeepKernelParameters(sigma=params['sigma'], nn_params=params['nn_params'])
+    optimized_kernel_params = DeepKernelParameters(log_alpha=params['log_alpha'], nn_params=params['nn_params'])
     optimized_gp_params = GaussianProcessParameters(noise=params['noise'])
 
     return optimized_kernel_params, optimized_gp_params
