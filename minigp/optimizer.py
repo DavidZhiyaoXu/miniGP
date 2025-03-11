@@ -30,6 +30,6 @@ class BayesianOptimizer():
         scores = self.acq_func.evaluate(X_candidate, self.y_best)
         return X_candidate[torch.argmin(scores)]
     
-    # TODO: Should call utils
+    # TODO: For BO visualization
     def plot_gif() -> None:
         pass

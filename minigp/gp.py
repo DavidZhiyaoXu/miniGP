@@ -1,5 +1,3 @@
-import torch
-
 import jax
 import jax.numpy as jnp
 import jax.random as random
@@ -9,7 +7,7 @@ import optax
 from typing import Tuple, NamedTuple, Optional, Any, Callable, Dict
 from dataclasses import dataclass
 
-from .kernel import AbstractKernel, AbstractKernelParameters, DeepKernel, DeepKernelParameters
+from .kernel import *
 
 
 @dataclass
@@ -66,24 +64,54 @@ class GaussianProcess():
         alpha = jsp.linalg.solve_triangular(L.T, alpha, lower=False)
 
         log_likelihood = -0.5 * jnp.dot(state.y_train, alpha)
-        log_likelihood -= jnp.sum(jnp.log(jnp.diag(L))) / 2
+        log_likelihood -= jnp.sum(jnp.log(jnp.diag(L)))
         log_likelihood -= 0.5 * len(state.y_train) * jnp.log(2 * jnp.pi)
         return log_likelihood
 
+def optimize_mle(gp: GaussianProcess, state: GaussianProcessState, kernel_params: AbstractKernelParameters, gp_params: GaussianProcessParameters, num_iters: int = 200, learning_rate: float = 0.01):
+    DEEP = 0
+    GAUSSIAN = 1
+    HEIGHT = 2
+    mode = DEEP if isinstance(kernel_params, DeepKernelParameters) else GAUSSIAN if isinstance(kernel_params, GaussianKernelParameters) else HEIGHT
 
 
-def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_params: DeepKernelParameters, gp_params: GaussianProcessParameters, num_iters: int = 200, learning_rate: float = 0.01):
-    def objective(params):
-        kernel_params = DeepKernelParameters(log_alpha=params['log_alpha'], nn_params=params['nn_params'])
-        gp_params = GaussianProcessParameters(noise=params['noise'])
-        return -gp.log_marginal_likelihood(state, kernel_params, gp_params)
+    if mode == DEEP:
+        def objective(params):
+            kernel_params = DeepKernelParameters(log_alpha=params['log_alpha'], nn_params=params['nn_params'])
+            gp_params = GaussianProcessParameters(noise=params['noise'])
+            return -gp.log_marginal_likelihood(state, kernel_params, gp_params)
+    elif mode == GAUSSIAN:
+        def objective(params):
+            kernel_params = GaussianKernelParameters(log_alpha=params['log_alpha'], sigma=params['sigma'])
+            gp_params = GaussianProcessParameters(noise=params['noise'])
+            return -gp.log_marginal_likelihood(state, kernel_params, gp_params)
+    elif mode == HEIGHT:
+        def objective(params):
+            kernel_params = HeightKernelParameters(log_alpha=params['log_alpha'], sigma=params['sigma'], coef=params['coef'])
+            gp_params = GaussianProcessParameters(noise=params['noise'])
+            return -gp.log_marginal_likelihood(state, kernel_params, gp_params)
 
-    # Flatten the parameters for optimization, NN kernel specific.
-    params = {
+    # Flatten parameters
+    if mode == DEEP:
+        params = {
         'log_alpha': kernel_params.log_alpha,
         'nn_params': kernel_params.nn_params,
         'noise': gp_params.noise
         }
+    elif mode == GAUSSIAN:
+        params = {
+        'log_alpha': kernel_params.log_alpha,
+        'sigma': kernel_params.sigma,
+        'noise': gp_params.noise
+        }
+    elif mode == HEIGHT:
+        params = {
+        'log_alpha': kernel_params.log_alpha,
+        'sigma': kernel_params.sigma,
+        'coef': kernel_params.coef,
+        'noise': gp_params.noise
+        }
+
     optimizer = optax.adam(learning_rate)
     opt_state = optimizer.init(params)
 
@@ -100,7 +128,14 @@ def optimize_mle_nn(gp: GaussianProcess, state: GaussianProcessState, kernel_par
         if (i + 1) % 50 == 0:
             print(f"Iteration {i+1}, Loss: {loss:.4f}")
 
-    optimized_kernel_params = DeepKernelParameters(log_alpha=params['log_alpha'], nn_params=params['nn_params'])
+
+    # Ensemble parameters
+    if mode == DEEP:
+        optimized_kernel_params = DeepKernelParameters(log_alpha=params['log_alpha'], nn_params=params['nn_params'])
+    elif mode == GAUSSIAN:
+        optimized_kernel_params = GaussianKernelParameters(log_alpha=params['log_alpha'], sigma=params['sigma'])
+    elif mode == HEIGHT:
+        optimized_kernel_params = HeightKernelParameters(log_alpha=params['log_alpha'], sigma=params['sigma'], coef=params['coef'])
     optimized_gp_params = GaussianProcessParameters(noise=params['noise'])
 
     return optimized_kernel_params, optimized_gp_params
