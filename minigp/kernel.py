@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, NamedTuple, Optional, Any, Callable, Dict
 from dataclasses import dataclass
 
-from .utils import AbstractNN
+from .warpednn import AbstractNN
 
 @dataclass
 class AbstractKernelParameters(ABC):
