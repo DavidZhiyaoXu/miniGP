@@ -54,3 +54,6 @@ MANIFEST
 # debugging iPython scripts and figures in root directory
 /*.ipy
 /*.pdf
+
+# Editor-specific config
+.vscode/
